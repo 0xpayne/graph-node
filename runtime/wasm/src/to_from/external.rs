@@ -4,7 +4,7 @@ use graph::{
     components::ethereum::{
         EthereumBlockData, EthereumCallData, EthereumEventData, EthereumTransactionData,
     },
-    runtime::{asc_get, asc_new, try_asc_get, AscPtr, AscType, AscValue, ToAscObj},
+    runtime::{asc_get, asc_new, try_asc_get, AscIndexId, AscPtr, AscType, AscValue, ToAscObj},
 };
 use graph::{data::store, runtime::DeterministicHostError};
 use graph::{prelude::serde_json, runtime::FromAscObj};
@@ -137,11 +137,15 @@ impl ToAscObj<AscEnum<EthereumValueKind>> for ethabi::Token {
         &self,
         heap: &mut H,
     ) -> Result<AscEnum<EthereumValueKind>, DeterministicHostError> {
+        // println!("ethabi::Token::to_asc_obj");
         use ethabi::Token::*;
 
         let kind = EthereumValueKind::get_kind(self);
         let payload = match self {
-            Address(address) => asc_new::<AscAddress, _, _>(heap, address)?.to_payload(),
+            Address(address) => {
+                // println!("--Address--");
+                asc_new::<AscAddress, _, _>(heap, address)?.to_payload()
+            }
             FixedBytes(bytes) | Bytes(bytes) => {
                 asc_new::<Uint8Array, _, _>(heap, &**bytes)?.to_payload()
             }
@@ -172,6 +176,7 @@ impl FromAscObj<AscEnum<EthereumValueKind>> for ethabi::Token {
         asc_enum: AscEnum<EthereumValueKind>,
         heap: &H,
     ) -> Result<Self, DeterministicHostError> {
+        // println!("ethabi::Token::from_asc_obj");
         use ethabi::Token;
 
         let payload = asc_enum.payload;
@@ -227,6 +232,7 @@ impl TryFromAscObj<AscEnum<StoreValueKind>> for store::Value {
         use self::store::Value;
 
         let payload = asc_enum.payload;
+        // println!("the payload: {}", payload.0);
         Ok(match asc_enum.kind {
             StoreValueKind::String => {
                 let ptr: AscPtr<AscString> = AscPtr::from(payload);
@@ -416,7 +422,7 @@ impl ToAscObj<AscEthereumTransaction_0_0_2> for EthereumTransactionData {
     }
 }
 
-impl<T: AscType> ToAscObj<AscEthereumEvent<T>> for EthereumEventData
+impl<T: AscType + AscIndexId> ToAscObj<AscEthereumEvent<T>> for EthereumEventData
 where
     EthereumTransactionData: ToAscObj<T>,
 {
@@ -529,7 +535,8 @@ impl<T: AscValue> ToAscObj<AscWrapped<T>> for AscWrapped<T> {
 impl<V, VAsc> ToAscObj<AscResult<AscPtr<VAsc>, bool>> for Result<V, bool>
 where
     V: ToAscObj<VAsc>,
-    VAsc: AscType,
+    VAsc: AscType + AscIndexId,
+    AscWrapped<AscPtr<VAsc>>: AscIndexId,
 {
     fn to_asc_obj<H: AscHeap + ?Sized>(
         &self,

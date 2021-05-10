@@ -1,0 +1,32 @@
+28,-- memInfo
+0,
+0,
+0,-- memInfo
+0,-- gcInfo
+0,
+0,
+0,-- gcInfo
+0,-- gcInfo2
+0,
+0,
+0,-- gcInfo2
+0,-- rtId
+0,
+0,
+0,-- rtId
+4,-- rtSize
+0,
+0,
+0,-- rtSize
+6,-- data
+7,
+8,
+9,-- data
+0,-- extra capacity
+0,
+0,
+0,
+0,
+0,
+0,
+0,-- extra capacity

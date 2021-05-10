@@ -33,12 +33,20 @@ async fn abi_array() {
         "2".to_owned(),
         "3".to_owned(),
         "4".to_owned(),
+        // 1, 2, 3, 4,
     ];
+
     let vec_obj: AscPtr<Array<AscPtr<AscString>>> = asc_new(&mut module, &*vec).unwrap();
+    // let vec_obj: AscPtr<Uint8Array> = asc_new(&mut module, &*vec).unwrap();
 
     let new_vec_obj: AscPtr<Array<AscPtr<AscString>>> = module.invoke_export("test_array", vec_obj);
+    // let new_value_ptr = module.invoke_export("test_array", vec_obj);
+    // println!("new_value_ptr: {:?}", new_value_ptr);
+    // let new_value: Value = try_asc_get(&module, new_value_ptr).unwrap();
+    // assert_eq!(new_value, Value::String("5".to_string()));
     let new_vec: Vec<String> = asc_get(&module, new_vec_obj).unwrap();
-
+    // let new_vec: Vec<u8> = asc_get(&module, new_vec_obj).unwrap();
+    //
     assert_eq!(
         new_vec,
         vec![
@@ -46,7 +54,12 @@ async fn abi_array() {
             "2".to_owned(),
             "3".to_owned(),
             "4".to_owned(),
-            "5".to_owned()
+            "5".to_owned(),
+            // 1,
+            // 2,
+            // 3,
+            // 4,
+            // 5
         ]
     )
 }
@@ -103,11 +116,16 @@ async fn abi_ethabi_token_identity() {
     let token_address = Token::Address(address);
 
     let token_address_ptr = asc_new(&mut module, &token_address).unwrap();
-    let new_address_obj: AscPtr<ArrayBuffer> =
+    // println!("before token_to_address 1");
+    let new_address_obj: AscPtr<AscAddress> =
         module.invoke_export("token_to_address", token_address_ptr);
 
+    // println!("after token_to_address 1");
+    // println!("before token_to_address 2");
     let new_token_ptr = module.invoke_export("token_from_address", new_address_obj);
+    // println!("after token_to_address 2");
     let new_token = asc_get(&module, new_token_ptr).unwrap();
+    // println!("NOT GETTING HERE");
 
     assert_eq!(token_address, new_token);
 
@@ -115,10 +133,14 @@ async fn abi_ethabi_token_identity() {
     let token_bytes = Token::Bytes(vec![42, 45, 7, 245, 45]);
 
     let token_bytes_ptr = asc_new(&mut module, &token_bytes).unwrap();
+    // println!("before token_to_bytes 1");
     let new_bytes_obj: AscPtr<ArrayBuffer> =
         module.invoke_export("token_to_bytes", token_bytes_ptr);
+    // println!("after token_to_bytes 1");
 
+    // println!("before token_to_bytes 2");
     let new_token_ptr = module.invoke_export("token_from_bytes", new_bytes_obj);
+    // println!("after token_to_bytes 2");
     let new_token = asc_get(&module, new_token_ptr).unwrap();
 
     assert_eq!(token_bytes, new_token);
@@ -127,9 +149,13 @@ async fn abi_ethabi_token_identity() {
     let int_token = Token::Int(U256([256, 453452345, 0, 42]));
 
     let int_token_ptr = asc_new(&mut module, &int_token).unwrap();
+    // println!("before token_to_int 1");
     let new_int_obj: AscPtr<ArrayBuffer> = module.invoke_export("token_to_int", int_token_ptr);
+    // println!("after token_to_int 1");
 
+    // println!("before token_to_int 2");
     let new_token_ptr = module.invoke_export("token_from_int", new_int_obj);
+    // println!("after token_to_int 2");
     let new_token = asc_get(&module, new_token_ptr).unwrap();
 
     assert_eq!(int_token, new_token);
@@ -304,11 +330,18 @@ async fn abi_h160() {
 async fn string() {
     let mut module = test_module("string", mock_data_source("wasm_test/abi_classes.wasm"));
     let string = "    漢字Double_Me🇧🇷  ";
+    // let string = " 12345 ";// -> to_asc_bytes
     let trimmed_string_ptr = asc_new(&mut module, string).unwrap();
     let trimmed_string_obj: AscPtr<AscString> =
         module.invoke_export("repeat_twice", trimmed_string_ptr);
     let doubled_string: String = asc_get(&module, trimmed_string_obj).unwrap();
     assert_eq!(doubled_string, string.repeat(2))
+
+    // let trimmed_string_obj =
+    //     module.invoke_export("repeat_twice", trimmed_string_ptr);
+    // let doubled_string: Value = try_asc_get(&module, trimmed_string_obj).unwrap();
+    // // assert_eq!(doubled_string, Value::Int(7));
+    // assert_eq!(doubled_string, Value::String(" 12345 ".to_string()));
 }
 
 #[tokio::test]

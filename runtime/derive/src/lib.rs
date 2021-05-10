@@ -68,9 +68,12 @@ fn asc_type_derive_struct(item_struct: ItemStruct) -> TokenStream {
     TokenStream::from(quote! {
         impl#impl_generics AscType for #struct_name#ty_generics #where_clause {
             fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
+                // println!("INSIDE DERIVE");
+                // println!("{}::to_asc_bytes", stringify!(#struct_name));
                let mut bytes = Vec::new();
                 #(bytes.extend_from_slice(&self.#field_names.to_asc_bytes()?);)*
 
+                // println!("final bytes of derive to_asc_bytes: {:?}", bytes);
                 // Assert that the struct has no padding.
                 assert_eq!(bytes.len(), size_of::<Self>());
                 Ok(bytes)
@@ -78,7 +81,15 @@ fn asc_type_derive_struct(item_struct: ItemStruct) -> TokenStream {
 
             #[allow(unused_variables)]
             fn from_asc_bytes(asc_obj: &[u8]) -> Result<Self, DeterministicHostError> {
-                if asc_obj.len() != size_of::<Self>() {
+                // println!("INSIDE DERIVE: {:?}", asc_obj);
+                // println!("{}::from_asc_bytes", stringify!(#struct_name));
+                // println!("asc_obj.len(): {}", asc_obj.len());
+                // println!("size_of::<Self>: {}", size_of::<Self>());
+                let header_size = 20;
+                let content_size = size_of::<Self>();
+                let aligned_size = 16 - (header_size + content_size) % 16;
+
+                if asc_obj.len() + header_size == aligned_size + content_size {
                     return Err(DeterministicHostError(anyhow::anyhow!("Size does not match")));
                 }
                 let mut offset = 0;
@@ -164,13 +175,21 @@ fn asc_type_derive_enum(item_enum: ItemEnum) -> TokenStream {
     TokenStream::from(quote! {
         impl#impl_generics AscType for #enum_name#ty_generics #where_clause {
             fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
+                // println!("INSIDE DERIVE");
+                // println!("{}::to_asc_bytes", stringify!(#enum_name));
                 let discriminant: u32 = match self {
                     #(#enum_name_iter::#variant_paths => #variant_discriminant,)*
                 };
-                discriminant.to_asc_bytes()
+                let bytes = discriminant.to_asc_bytes()?;
+                // println!("final bytes of derive to_asc_bytes: {:?}", bytes);
+                Ok(bytes)
             }
 
             fn from_asc_bytes(asc_obj: &[u8]) -> Result<Self, DeterministicHostError> {
+                // println!("INSIDE DERIVE: {:?}", asc_obj);
+                // println!("{}::from_asc_bytes", stringify!(#enum_name));
+                // println!("asc_obj.len(): {}", asc_obj.len());
+                // println!("size_of::<Self>: {}", size_of::<Self>());
                 let u32_bytes = ::std::convert::TryFrom::try_from(asc_obj)
                     .map_err(|_| DeterministicHostError(anyhow::anyhow!("Invalid asc bytes size")))?;
                 let discr = u32::from_le_bytes(u32_bytes);

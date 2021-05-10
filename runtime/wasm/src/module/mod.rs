@@ -15,9 +15,10 @@ use crate::host_exports;
 use crate::mapping::MappingContext;
 use anyhow::Error;
 use ethabi::LogParam;
+use graph::data::store;
 use graph::prelude::*;
+use graph::runtime::{AscHeap, IndexForAscTypeId};
 use graph::{components::subgraph::MappingError, runtime::AscPtr};
-use graph::{data::store, runtime::AscHeap};
 use graph::{
     data::subgraph::schema::SubgraphError,
     runtime::{asc_get, asc_new, try_asc_get, DeterministicHostError},
@@ -78,6 +79,10 @@ impl<C: Blockchain> AscHeap for WasmInstance<C> {
 
     fn api_version(&self) -> Version {
         self.instance_ctx().api_version()
+    }
+
+    fn asc_type_id(&mut self, type_id_index: IndexForAscTypeId) -> u32 {
+        self.instance_ctx_mut().asc_type_id(type_id_index)
     }
 }
 
@@ -301,6 +306,9 @@ pub(crate) struct WasmInstanceContext<C: Blockchain> {
     // Function exported by the wasm module that will allocate the request number of bytes and
     // return a pointer to the first byte of allocated space.
     memory_allocate: wasmtime::TypedFunc<i32, i32>,
+
+    // Function wrapper for `idof<T>` from AssemblyScript
+    id_of_type: wasmtime::TypedFunc<u32, u32>,
 
     pub ctx: MappingContext<C>,
     pub(crate) valid_module: Arc<ValidModule>,
@@ -603,6 +611,7 @@ impl<C: Blockchain> AscHeap for WasmInstanceContext<C> {
 
         let size = i32::try_from(bytes.len()).unwrap();
         if size > self.arena_free_size {
+            // println!("alloc");
             // Allocate a new arena. Any free space left in the previous arena is left unused. This
             // causes at most half of memory to be wasted, which is acceptable.
             let arena_size = size.max(MIN_ARENA_SIZE);
@@ -610,16 +619,33 @@ impl<C: Blockchain> AscHeap for WasmInstanceContext<C> {
             // Unwrap: This may panic if more memory needs to be requested from the OS and that
             // fails. This error is not deterministic since it depends on the operating conditions
             // of the node.
-            self.arena_start_ptr = self.memory_allocate.call(arena_size).unwrap();
-            self.arena_free_size = arena_size;
+            self.arena_start_ptr = self.memory_allocate.call(arena_size).unwrap() + 12;
+            self.arena_free_size = arena_size - 12;
+            // self.arena_start_ptr = self.memory_allocate.call(arena_size).unwrap();
+            // self.arena_free_size = arena_size;
         };
 
         let ptr = self.arena_start_ptr as usize;
+        // println!("write (after possible alloc) bytes: {:?}", bytes);
+        // println!("write (after possible alloc) ptr: {}", ptr);
 
         // Unwrap: We have just allocated enough space for `bytes`.
         self.memory.write(ptr, bytes).unwrap();
+
         self.arena_start_ptr += size;
         self.arena_free_size -= size;
+
+        let mut data2 = vec![0; 1000];
+
+        let _ = self.memory.read(0, &mut data2).map_err(|_err| {
+            // println!("err: {}", _err);
+            DeterministicHostError(anyhow!(
+                "Heap access out of bounds. Offset: {} Size: {}",
+                0,
+                1000
+            ))
+        });
+        // println!("WRITE data2: {:?}", data2);
 
         Ok(ptr as u32)
     }
@@ -627,6 +653,33 @@ impl<C: Blockchain> AscHeap for WasmInstanceContext<C> {
     fn get(&self, offset: u32, size: u32) -> Result<Vec<u8>, DeterministicHostError> {
         let offset = offset as usize;
         let size = size as usize;
+
+        // println!("heap.get offset: {}", offset);
+        // println!("heap.get size: {}", size);
+
+        let mut data2 = vec![0; 1100];
+
+        let _ = self.memory.read(0, &mut data2).map_err(|_err| {
+            // println!("err: {}", _err);
+            DeterministicHostError(anyhow!(
+                "Heap access out of bounds. Offset: {} Size: {}",
+                0,
+                1000
+            ))
+        });
+        // println!("READ OFFSET ZERO data2: {:?}", data2);
+
+        let mut data2 = vec![0; 1000];
+
+        let _ = self.memory.read(10_000, &mut data2).map_err(|_err| {
+            // println!("err: {}", _err);
+            DeterministicHostError(anyhow!(
+                "Heap access out of bounds. Offset: {} Size: {}",
+                10_000,
+                1000
+            ))
+        });
+        // println!("READ OFFSET 10K data2: {:?}", data2);
 
         let mut data = vec![0; size];
 
@@ -643,6 +696,10 @@ impl<C: Blockchain> AscHeap for WasmInstanceContext<C> {
 
     fn api_version(&self) -> Version {
         self.ctx.host_exports.api_version.clone()
+    }
+
+    fn asc_type_id(&mut self, type_id_index: IndexForAscTypeId) -> u32 {
+        self.id_of_type.call(type_id_index as u32).unwrap()
     }
 }
 
@@ -662,13 +719,20 @@ impl<C: Blockchain> WasmInstanceContext<C> {
             .context("Failed to find memory export in the WASM module")?;
 
         let memory_allocate = instance
-            .get_func("memory.allocate")
-            .context("`memory.allocate` function not found")?
+            .get_func("allocate")
+            .context("`allocate` function not found")?
+            .typed()?
+            .clone();
+
+        let id_of_type = instance
+            .get_func("id_of_type")
+            .context("`id_of_type` function not found")?
             .typed()?
             .clone();
 
         Ok(WasmInstanceContext {
             memory_allocate,
+            id_of_type,
             memory,
             ctx,
             valid_module,
@@ -698,13 +762,21 @@ impl<C: Blockchain> WasmInstanceContext<C> {
             .context("Failed to find memory export in the WASM module")?;
 
         let memory_allocate = caller
-            .get_export("memory.allocate")
+            .get_export("allocate")
             .and_then(|e| e.into_func())
-            .context("`memory.allocate` function not found")?
+            .context("`allocate` function not found")?
+            .typed()?
+            .clone();
+
+        let id_of_type = caller
+            .get_export("id_of_type")
+            .and_then(|e| e.into_func())
+            .context("`id_of_type` function not found")?
             .typed()?
             .clone();
 
         Ok(WasmInstanceContext {
+            id_of_type,
             memory_allocate,
             memory,
             ctx,

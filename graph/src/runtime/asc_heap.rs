@@ -1,6 +1,6 @@
 use semver::Version;
 
-use super::{AscPtr, AscType, DeterministicHostError};
+use super::{AscIndexId, AscPtr, AscType, DeterministicHostError, IndexForAscTypeId};
 /// A type that can read and write to the Asc heap. Call `asc_new` and `asc_get`
 /// for reading and writing Rust structs from and to Asc.
 ///
@@ -12,6 +12,8 @@ pub trait AscHeap {
     fn get(&self, offset: u32, size: u32) -> Result<Vec<u8>, DeterministicHostError>;
 
     fn api_version(&self) -> Version;
+
+    fn asc_type_id(&mut self, type_id_index: IndexForAscTypeId) -> u32;
 }
 
 /// Instantiate `rust_obj` as an Asc object of class `C`.
@@ -24,9 +26,10 @@ pub fn asc_new<C, T: ?Sized, H: AscHeap + ?Sized>(
     rust_obj: &T,
 ) -> Result<AscPtr<C>, DeterministicHostError>
 where
-    C: AscType,
+    C: AscType + AscIndexId,
     T: ToAscObj<C>,
 {
+    // println!("AscHeap::asc_new");
     let obj = rust_obj.to_asc_obj(heap)?;
     AscPtr::alloc_obj(obj, heap)
 }
@@ -40,7 +43,7 @@ pub fn asc_get<T, C, H: AscHeap + ?Sized>(
     asc_ptr: AscPtr<C>,
 ) -> Result<T, DeterministicHostError>
 where
-    C: AscType,
+    C: AscType + AscIndexId,
     T: FromAscObj<C>,
 {
     T::from_asc_obj(asc_ptr.read_ptr(heap)?, heap)
@@ -51,7 +54,7 @@ pub fn try_asc_get<T, C, H: AscHeap + ?Sized>(
     asc_ptr: AscPtr<C>,
 ) -> Result<T, DeterministicHostError>
 where
-    C: AscType,
+    C: AscType + AscIndexId,
     T: TryFromAscObj<C>,
 {
     T::try_from_asc_obj(asc_ptr.read_ptr(heap)?, heap)

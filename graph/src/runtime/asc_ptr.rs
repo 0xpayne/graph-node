@@ -1,6 +1,6 @@
 use super::DeterministicHostError;
 
-use super::{AscHeap, AscType};
+use super::{AscHeap, AscIndexId, AscType, IndexForAscTypeId};
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem::size_of;
@@ -40,7 +40,7 @@ impl<C> AscPtr<C> {
     }
 }
 
-impl<C: AscType> AscPtr<C> {
+impl<C: AscType + AscIndexId> AscPtr<C> {
     /// Create a pointer that is equivalent to AssemblyScript's `null`.
     #[inline(always)]
     pub fn null() -> Self {
@@ -49,7 +49,11 @@ impl<C: AscType> AscPtr<C> {
 
     /// Read from `self` into the Rust struct `C`.
     pub fn read_ptr<H: AscHeap + ?Sized>(self, heap: &H) -> Result<C, DeterministicHostError> {
+        // println!("AscPtr::read_ptr");
+        // println!("who's it reading tho: {}", std::any::type_name::<C>());
+        // println!("self.0: {}", self.0);
         let bytes = heap.get(self.0, C::asc_size(self, heap)?)?;
+        // println!("bytes: {:?}", bytes);
         C::from_asc_bytes(&bytes)
     }
 
@@ -58,14 +62,75 @@ impl<C: AscType> AscPtr<C> {
         asc_obj: C,
         heap: &mut H,
     ) -> Result<AscPtr<C>, DeterministicHostError> {
-        let heap_ptr = heap.raw_new(&asc_obj.to_asc_bytes()?)?;
-        Ok(AscPtr::new(heap_ptr))
+        let mut bytes = asc_obj.to_asc_bytes()?; // String -> AscString
+                                                 // println!("content len: {}", bytes.len());
+                                                 // println!("full len: {}", bytes.len() + 20);
+                                                 // let old_len = bytes.len();
+                                                 // let BLOCK_OVERHEAD = 4;
+                                                 // let AL_MASK = 15;
+                                                 // let aligned_len = 16 - (bytes.len() % 16);
+                                                 // let aligned_len = 16 - ((bytes.len() + BLOCK_OVERHEAD) % 16);
+                                                 // let aligned_len = (bytes.len() + 20 - BLOCK_OVERHEAD) % 16;
+                                                 // let aligned_len = ((bytes.len() + AL_MASK) & !AL_MASK);
+                                                 // let aligned_len = ((bytes.len() + 16 + BLOCK_OVERHEAD + AL_MASK) & !AL_MASK) - BLOCK_OVERHEAD;
+        let aligned_len = 16 - (bytes.len() + 20) % 16;
+        // println!("aligned_len: {}", aligned_len);
+        // bytes.extend(std::iter::repeat(0).take(aligned_len - old_len));
+        bytes.extend(std::iter::repeat(0).take(aligned_len));
+        // println!(
+        //     "content.len (bytes/asc_obj.to_asc_bytes()): {}",
+        //     bytes.len()
+        // );
+        let header =
+            Self::generate_header(
+                heap,
+                C::INDEX_ASC_TYPE_ID,
+                asc_obj.content_len(&bytes),
+                bytes.len(),
+            );
+
+        let header_len = header.len() as u32;
+        // println!("header: {:?}", header);
+        // println!("header_len: {}", header_len);
+
+        let heap_ptr = heap.raw_new(&[header, bytes].concat())?;
+
+        // Use header length as offset. so the AscPtr points directly at the content.
+        Ok(AscPtr::new(heap_ptr + header_len))
+    }
+
+    fn generate_header<H: AscHeap + ?Sized>(
+        heap: &mut H,
+        type_id_index: IndexForAscTypeId,
+        content_length: usize,
+        full_length: usize,
+    ) -> Vec<u8> {
+        let mut header: Vec<u8> = Vec::with_capacity(20);
+
+        let gc_info: [u8; 4] = (0u32).to_le_bytes();
+        let gc_info2: [u8; 4] = (0u32).to_le_bytes();
+        let asc_type_id = heap.asc_type_id(type_id_index);
+        let rt_id: [u8; 4] = asc_type_id.to_le_bytes();
+        let rt_size: [u8; 4] = (content_length as u32).to_le_bytes();
+
+        let mm_info: [u8; 4] =
+            ((gc_info.len() + gc_info2.len() + rt_id.len() + rt_size.len() + full_length) as u32)
+                .to_le_bytes();
+
+        header.extend(&mm_info);
+        header.extend(&gc_info);
+        header.extend(&gc_info2);
+        header.extend(&rt_id);
+        header.extend(&rt_size);
+
+        header
     }
 
     /// Helper used by arrays and strings to read their length.
-    pub fn read_u32<H: AscHeap + ?Sized>(&self, heap: &H) -> Result<u32, DeterministicHostError> {
+    pub fn read_len<H: AscHeap + ?Sized>(&self, heap: &H) -> Result<u32, DeterministicHostError> {
         // Read the bytes pointed to by `self` as the bytes of a `u32`.
-        let raw_bytes = heap.get(self.0, size_of::<u32>() as u32)?;
+        // println!("AscPtr::read_len");
+        let raw_bytes = heap.get(self.0 - 4, size_of::<u32>() as u32)?;
         let mut u32_bytes: [u8; size_of::<u32>()] = [0; size_of::<u32>()];
         u32_bytes.copy_from_slice(&raw_bytes);
         Ok(u32::from_le_bytes(u32_bytes))

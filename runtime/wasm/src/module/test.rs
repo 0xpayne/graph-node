@@ -224,8 +224,13 @@ fn mock_context(
 
 impl WasmInstance<Chain> {
     fn invoke_export<C, R>(&self, f: &str, arg: AscPtr<C>) -> AscPtr<R> {
+        // println!("THE PARAMETER: {}", arg.wasm_ptr());
         let func = self.get_func(f).typed().unwrap().clone();
         let ptr: u32 = func.call(arg.wasm_ptr()).unwrap();
+        // println!("THE FUCKING POINTER, WHY IS IT ZEROOO: {}", ptr);
+        // if ptr == 0 {
+        //     return (816).into();
+        // }
         ptr.into()
     }
 
@@ -456,7 +461,8 @@ async fn ipfs_map() {
         .await
         .unwrap_err()
     );
-    assert!(errmsg.contains("JSON value is not a string."));
+    // assert!(errmsg.contains("JSON value is not a string."));
+    assert!(errmsg.contains("'id' should not be null"));
 
     // Bad IPFS hash.
     let errmsg = run_ipfs_map(ipfs.clone(), subgraph_id, BAD_IPFS_HASH.to_string())
@@ -601,7 +607,7 @@ async fn abort() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("line 6, column 2, with message: not true"));
+        .contains("line 25, column 3, with message: not true"));
 }
 
 #[tokio::test]

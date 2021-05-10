@@ -1,0 +1,32 @@
+28,-- mmInfo
+0,
+0,
+0,
+0,-- gcInfo
+0,
+0,
+0,
+0,-- gcInfo2
+0,
+0,
+0,
+0,-- rtId
+0,
+0,
+0,
+4,-- rtSize
+0,
+0,
+0,
+6,-- data -> position 10_592 in WASM memory
+7,
+8,
+9,
+0,-- extra capacity
+0,
+0,
+0,
+0,
+0,
+0,
+0,
