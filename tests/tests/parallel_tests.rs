@@ -23,18 +23,38 @@ lazy_static::lazy_static! {
         parse_numeric_environment_variable("TESTS_POSTGRES_HARD_WAIT_SECONDS");
 }
 
+/// data-source-revert error:
+/// [data-source-revert:stdout] ERROR TS2322: Type '~lib/@graphprotocol/graph-ts/index/Value | null' is not assignable to type '~lib/@graphprotocol/graph-ts/index/Value'.
+/// [data-source-revert:stdout]
+/// [data-source-revert:stdout]      return value.toI32();
+/// [data-source-revert:stdout]             ~~~~~
+/// [data-source-revert:stdout]  in generated/schema.ts(47,12)
+
+/// remove-then-update error:
+/// [graph-node:stderr] Jun 08 18:30:30.102 ERRO Handler skipped due to execution failure, error: Mapping aborted at generated/schema.ts, line 33, column 12, with message: unexpected upcast       wasm backtrace:     0: 0x2cb7 - <unknown>!src/mapping/handleTrigger , handler: handleTrigger, block_hash: 0xbf6450cd11893e85abd3203e4fe284aa07316da218119f88fde774923f781fb0, block_number: 5, sgd: 1, subgraph_id: QmSZ2NrHuhgPRE6jAVs1iXJEKHrB1V4ZN2L1ZTVHgjsKZv, component: SubgraphInstanceManager
+/// [graph-node:stderr] Jun 08 18:30:30.102 INFO Done processing Ethereum trigger, data_source: Contract, handler: handleTrigger, total_ms: 3, address: 0xcfeb…a601, signature: Trigger(uint16), block_hash: 0xbf6450cd11893e85abd3203e4fe284aa07316da218119f88fde774923f781fb0, block_number: 5, sgd: 1, subgraph_id: QmSZ2NrHuhgPRE6jAVs1iXJEKHrB1V4ZN2L1ZTVHgjsKZv, component: SubgraphInstanceManager
+/// [graph-node:stderr] Jun 08 18:30:30.112 ERRO Subgraph instance failed to run: Mapping aborted at generated/schema.ts, line 33, column 12, with message: unexpected upcast       wasm backtrace:     0: 0x2cb7 - <unknown>!src/mapping/handleTrigger  in handler `handleTrigger` at block #5 (bf6450cd11893e85abd3203e4fe284aa07316da218119f88fde774923f781fb0), code: SubgraphSyncingFailure, sgd: 1, subgraph_id: QmSZ2NrHuhgPRE6jAVs1iXJEKHrB1V4ZN2L1ZTVHgjsKZv, component: SubgraphInstanceManager
+
+/// value-roundtrip:
+/// [value-roundtrip:stdout] ERROR TS2322: Type '~lib/@graphprotocol/graph-ts/index/Value | null' is not assignable to type '~lib/@graphprotocol/graph-ts/index/Value'.
+/// [value-roundtrip:stdout]
+/// [value-roundtrip:stdout]      return value.toString();
+/// [value-roundtrip:stdout]             ~~~~~
+/// [value-roundtrip:stdout]  in generated/schema.ts(47,12)
+
 /// All integration tests subdirectories to run
-pub const INTEGRATION_TESTS_DIRECTORIES: [&str; 9] = [
+// pub const INTEGRATION_TESTS_DIRECTORIES: [&str; 9] = [
+pub const INTEGRATION_TESTS_DIRECTORIES: [&str; 1] = [
     // "arweave-and-3box",
-    "data-source-context",
-    "data-source-revert",
-    "fatal-error",
-    "ganache-reverts",
-    "host-exports",
-    "non-fatal-errors",
-    "overloaded-contract-functions",
-    "remove-then-update",
-    "value-roundtrip",
+    // "data-source-context",// OK
+    "data-source-revert",// ERROR
+    // "fatal-error",// OK
+    // "ganache-reverts",// OK
+    // "host-exports",// OK
+    // "non-fatal-errors",// OK
+    // "overloaded-contract-functions",// OK
+    // "remove-then-update",// ERROR
+    // "value-roundtrip",// ERROR
 ];
 
 /// Contains all information a test command needs
