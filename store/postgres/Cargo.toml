@@ -29,6 +29,8 @@ serde = "1.0"
 uuid = { version = "0.8.1", features = ["v4"] }
 stable-hash = { git = "https://github.com/graphprotocol/stable-hash" }
 backtrace = "0.3"
+anyhow = "1.0.41"
+itertools = "0.10.1"
 
 [dev-dependencies]
 clap = "2.33.3"
